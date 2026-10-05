@@ -269,6 +269,58 @@ def format_traffic_row(remote: str, protocol: str, packets: str, byte_count: str
         fields.append((last_seen, layout.last_width, True))
     return [_format_traffic_cells(fields)]
 
+def restoration_failure_modal(stdscr) -> str:
+    """Ask whether to retry a failed ARP correction or leave anyway."""
+    window = make_modal(stdscr, 9, 76)
+    window.timeout(-1)
+    while True:
+        window.erase()
+        window.box()
+        height, width = window.getmaxyx()
+        lines = [
+            "Lantern could not send all ARP restoration frames.",
+            "The target or gateway may retain a stale ARP entry.",
+            "r retries · Esc returns to traffic view · q leaves after final retries",
+        ]
+        for row, text in enumerate(lines, 1):
+            if row < height - 2:
+                window.addnstr(row, 2, text, max(1, width - 4))
+        window.refresh()
+        key = window.getch()
+        if key in (ord("r"), ord("R")):
+            return "retry"
+        if key in (ord("q"), ord("Q")):
+            return "force"
+        if key in (27, ord("n"), ord("N")):
+            return "return"
+
+
+def _restore_with_retries(session: ArpSpoofSession, attempts: int = 3) -> bool:
+    """Retry correction frames briefly before closing the packet socket."""
+    for attempt in range(attempts):
+        if session.stop():
+            return True
+        if attempt + 1 < attempts:
+            time.sleep(0.2)
+    return False
+
+
+def _request_traffic_exit(stdscr, session: ArpSpoofSession | None) -> bool:
+    """Keep the capture socket open until restore succeeds or exit is confirmed."""
+    if not session or not (session.active or session.needs_restore):
+        return True
+    while session.active or session.needs_restore:
+        if session.stop():
+            return True
+        choice = restoration_failure_modal(stdscr)
+        if choice == "retry":
+            continue
+        if choice == "force":
+            return True
+        return False
+    return True
+
+
 def traffic_view(stdscr, monitor: ArpMonitor, selected_mac: str) -> None:
     device = monitor.devices.get(selected_mac)
     if not device or not device.ip or device.ip == "unknown":
@@ -417,7 +469,11 @@ def traffic_view(stdscr, monitor: ArpMonitor, selected_mac: str) -> None:
             action = ("s stop interception" if spoof_session and spoof_session.active
                       else "s retry ARP restore" if spoof_session and spoof_session.needs_restore
                       else "s start interception")
-            footer = "Capture stopped · q / Esc return" if capture_error else f"Capture active · {action} · q / Esc return"
+            if capture_error:
+                retry_hint = " · s retry ARP restore" if spoof_session and spoof_session.needs_restore else ""
+                footer = f"Capture stopped{retry_hint} · q / Esc return"
+            else:
+                footer = f"Capture active · {action} · q / Esc return"
             put(height - 1, footer, FOOTER_ATTR)
             stdscr.refresh()
             key = stdscr.getch()
@@ -429,12 +485,19 @@ def traffic_view(stdscr, monitor: ArpMonitor, selected_mac: str) -> None:
                     spoof_session = toggle_arp_spoof(stdscr, monitor, selected_mac, capture, spoof_session)
                     page_notice = monitor.status_message
             elif key in (ord("q"), 27):
-                break
+                if _request_traffic_exit(stdscr, spoof_session):
+                    break
+                page_notice = "ARP restoration still pending; press s to retry or q to try exiting again."
+                monitor.status_message = page_notice
     finally:
         if spoof_session and (spoof_session.active or spoof_session.needs_restore):
-            restored = spoof_session.stop()
-            if not restored:
-                monitor.status_message = "Traffic view closed; ARP restoration failed. Check target and gateway connectivity."
+            if _restore_with_retries(spoof_session):
+                monitor.status_message = "ARP restoration frames sent; peer caches remain unverified."
+            else:
+                monitor.status_message = (
+                    "WARNING: ARP restoration failed after retries. Check target and gateway connectivity; "
+                    "stale ARP entries may need to expire or be cleared."
+                )
         runtime_names.close()
         ptr_executor.shutdown(wait=False, cancel_futures=True)
         capture.close()

@@ -1,0 +1,20 @@
+# Python bytecode and test/tool caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local environments and editable-install metadata
+.venv/
+venv/
+.env/
+*.egg-info/
+build/
+dist/
+
+# Local editor/OS files
+.DS_Store
+.idea/
+.vscode/

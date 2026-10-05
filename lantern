@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Executable Lantern entry point."""
+from libs.cli import main_entry
+
+if __name__ == "__main__":
+    raise SystemExit(main_entry())

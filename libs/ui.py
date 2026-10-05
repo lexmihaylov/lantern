@@ -8,7 +8,7 @@ from .models import Device
 from .network import ArpMonitor, age_compact, ago, filtered_devices, ordered_devices, save_labels, seen_when
 from .probes import ping_device, scan_device
 from .traffic_view import traffic_view
-from .ui_components import FOOTER_ATTR, HEADER_ATTR, init_modal_style, make_modal, text_modal
+from .ui_components import FOOTER_ATTR, HEADER_ATTR, draw_scrollbar, init_modal_style, make_modal, text_modal
 
 def draw(stdscr, monitor: ArpMonitor, selected_mac: str, query: str = "") -> str:
     stdscr.erase()
@@ -17,7 +17,8 @@ def draw(stdscr, monitor: ArpMonitor, selected_mac: str, query: str = "") -> str
     def put(y: int, text: str, attr: int = 0) -> None:
         if 0 <= y < height and width > 2:
             try:
-                stdscr.addnstr(y, 1, text, width - 2, attr)
+                # Reserve a blank column before the right-edge scrollbar.
+                stdscr.addnstr(y, 1, text, width - 3, attr)
             except curses.error:
                 pass
 
@@ -74,6 +75,8 @@ def draw(stdscr, monitor: ArpMonitor, selected_mac: str, query: str = "") -> str
     first = max(0, min(selected_row - visible + 1, len(table_rows) - visible)) if visible else 0
     for index, (text, _device, attr) in enumerate(table_rows[first:first + visible]):
         put(list_start + index, text, attr)
+    draw_scrollbar(stdscr, len(table_rows), visible, first,
+                   y=list_start, height=visible, x=width - 1)
 
     put(height - 1, f"{len(items)} devices · ↑/↓ move · Enter details · / filter · t traffic · ? help · q quit", FOOTER_ATTR)
     stdscr.refresh()

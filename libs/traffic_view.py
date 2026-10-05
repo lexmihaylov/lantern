@@ -12,7 +12,7 @@ import unicodedata
 from .models import Device, Flow
 from .network import ArpMonitor, QUIET_AFTER, ago, reverse_resolve
 from .traffic import ArpSpoofSession, TrafficCapture
-from .ui_components import FOOTER_ATTR, HEADER_ATTR, make_modal, text_modal
+from .ui_components import FOOTER_ATTR, HEADER_ATTR, draw_scrollbar, make_modal, text_modal
 
 def confirm_arp_spoof(stdscr, target: Device, gateway: Device) -> bool:
     window = make_modal(stdscr, 10, 76)
@@ -342,6 +342,7 @@ def traffic_view(stdscr, monitor: ArpMonitor, selected_mac: str) -> None:
     spoof_session: ArpSpoofSession | None = None
     page_notice = ""
     capture_error = ""
+    traffic_scroll = 0
     try:
         while True:
             monitor.listen(0)
@@ -423,7 +424,8 @@ def traffic_view(stdscr, monitor: ArpMonitor, selected_mac: str) -> None:
             def put(y: int, text: str, attr: int = 0) -> None:
                 if 0 <= y < height and width > 2:
                     try:
-                        stdscr.addnstr(y, 1, _fit_terminal_cell(text, width - 2), width - 2, attr)
+                        # Leave one blank column between content and the scrollbar.
+                        stdscr.addnstr(y, 1, _fit_terminal_cell(text, width - 3), width - 3, attr)
                     except curses.error:
                         pass
 
@@ -448,36 +450,50 @@ def traffic_view(stdscr, monitor: ArpMonitor, selected_mac: str) -> None:
             packet_width = max((len(entry[2]) for entry in entries), default=7)
             byte_width = max((len(entry[3]) for entry in entries), default=5)
             last_width = max((_terminal_cell_width(entry[4]) for entry in entries), default=9)
-            layout = traffic_table_layout(width, packet_width, byte_width, last_width)
+            layout = traffic_table_layout(width - 1, packet_width, byte_width, last_width)
             put(3, format_traffic_header(layout), curses.A_UNDERLINE)
 
             visible = max(0, height - 6)
+            table_lines: list[str] = []
             if not entries:
                 put(4, "No matching packets observed yet. Other devices' unicast traffic may not be visible here.")
             else:
-                table_lines: list[str] = []
                 for entry in entries:
-                    flow_lines = format_traffic_row(*entry, layout)
-                    if len(table_lines) + len(flow_lines) > visible:
-                        break
-                    table_lines.extend(flow_lines)
-                for index, line in enumerate(table_lines, 4):
+                    table_lines.extend(format_traffic_row(*entry, layout))
+                max_scroll = max(0, len(table_lines) - visible)
+                traffic_scroll = max(0, min(traffic_scroll, max_scroll))
+                for index, line in enumerate(table_lines[traffic_scroll:traffic_scroll + visible], 4):
                     put(index, line)
+                draw_scrollbar(stdscr, len(table_lines), visible, traffic_scroll,
+                               y=4, height=visible, x=width - 1)
             note = ("PTR names may be missing or generic; lookups use system DNS."
                     if width < 64 else "PTR lookups use system DNS; names may be missing or differ from service domains.")
             put(height - 2, note)
             action = ("s stop interception" if spoof_session and spoof_session.active
                       else "s retry ARP restore" if spoof_session and spoof_session.needs_restore
                       else "s start interception")
+            scroll_hint = "↑/↓ scroll"
             if capture_error:
                 retry_hint = " · s retry ARP restore" if spoof_session and spoof_session.needs_restore else ""
-                footer = f"Capture stopped{retry_hint} · q / Esc return"
+                footer = f"Capture stopped · {scroll_hint}{retry_hint} · q / Esc return"
             else:
-                footer = f"Capture active · {action} · q / Esc return"
+                footer = f"Capture active · {scroll_hint} · {action} · q / Esc return"
             put(height - 1, footer, FOOTER_ATTR)
             stdscr.refresh()
             key = stdscr.getch()
-            if key in (ord("s"), ord("S")):
+            if key in (curses.KEY_UP, ord("k")):
+                traffic_scroll = max(0, traffic_scroll - 1)
+            elif key in (curses.KEY_DOWN, ord("j")):
+                traffic_scroll = min(max(0, len(table_lines) - visible), traffic_scroll + 1)
+            elif key == curses.KEY_PPAGE:
+                traffic_scroll = max(0, traffic_scroll - max(1, visible))
+            elif key == curses.KEY_NPAGE:
+                traffic_scroll = min(max(0, len(table_lines) - visible), traffic_scroll + max(1, visible))
+            elif key == curses.KEY_HOME:
+                traffic_scroll = 0
+            elif key == curses.KEY_END:
+                traffic_scroll = max(0, len(table_lines) - visible)
+            elif key in (ord("s"), ord("S")):
                 if capture_error and not (spoof_session and spoof_session.needs_restore):
                     page_notice = "Cannot start interception because packet capture has stopped."
                     monitor.status_message = page_notice

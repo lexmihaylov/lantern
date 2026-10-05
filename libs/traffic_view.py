@@ -12,7 +12,9 @@ import unicodedata
 from .models import Device, Flow
 from .network import ArpMonitor, QUIET_AFTER, ago, reverse_resolve
 from .traffic import ArpSpoofSession, TrafficCapture
-from .ui_components import FOOTER_ATTR, HEADER_ATTR, draw_scrollbar, make_modal, text_modal
+from .ui_components import scrollbar, style
+from .ui_components.modal import make_modal
+from .ui_components.text_modal import text_modal
 
 def confirm_arp_spoof(stdscr, target: Device, gateway: Device) -> bool:
     window = make_modal(stdscr, 10, 76)
@@ -430,8 +432,8 @@ def traffic_view(stdscr, monitor: ArpMonitor, selected_mac: str) -> None:
                         pass
 
             label = device.label or device.name or device.mac
-            put(0, f"TRAFFIC · {label} · {capture.target_ip}", HEADER_ATTR)
-            put(1, f"Capture stopped: {capture_error}" if capture_error else "ACTIVE ARP interception · forwarding selected device traffic" if spoof_session and spoof_session.active else "Passive, in-memory summary · only packets visible to this host are shown", HEADER_ATTR)
+            put(0, f"TRAFFIC · {label} · {capture.target_ip}", style.HEADER_ATTR)
+            put(1, f"Capture stopped: {capture_error}" if capture_error else "ACTIVE ARP interception · forwarding selected device traffic" if spoof_session and spoof_session.active else "Passive, in-memory summary · only packets visible to this host are shown", style.HEADER_ATTR)
             endpoints = group_traffic_flows(capture.flows.values(), capture.target_ip)
             resolved_names = runtime_names.update(endpoint.ip for endpoint in endpoints)
             put(2, page_notice or f"{capture.packet_count} matching packets · {len(endpoints)} remote endpoints · {len(resolved_names)} PTR names")
@@ -470,7 +472,7 @@ def traffic_view(stdscr, monitor: ArpMonitor, selected_mac: str) -> None:
                 traffic_scroll = max(0, min(traffic_scroll, max_scroll))
                 for index, line in enumerate(table_lines[traffic_scroll:traffic_scroll + visible], 4):
                     put(index, line, scrollbar_gutter=needs_scrollbar)
-                draw_scrollbar(stdscr, len(table_lines), visible, traffic_scroll,
+                scrollbar.draw_scrollbar(stdscr, len(table_lines), visible, traffic_scroll,
                                y=4, height=visible, x=width - 1)
             note = ("PTR names may be missing or generic; lookups use system DNS."
                     if width < 64 else "PTR lookups use system DNS; names may be missing or differ from service domains.")
@@ -485,7 +487,7 @@ def traffic_view(stdscr, monitor: ArpMonitor, selected_mac: str) -> None:
                           else "Capture stopped · q / Esc return")
             else:
                 footer = f"{action} · {scroll_hint} · q / Esc return"
-            put(height - 1, footer, FOOTER_ATTR)
+            put(height - 1, footer, style.FOOTER_ATTR)
             stdscr.refresh()
             key = stdscr.getch()
             if key in (curses.KEY_UP, ord("k")):

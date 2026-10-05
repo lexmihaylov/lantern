@@ -8,7 +8,10 @@ from .models import Device
 from .network import ArpMonitor, age_compact, ago, filtered_devices, ordered_devices, save_labels, seen_when
 from .probes import ping_device, scan_device
 from .traffic_view import traffic_view
-from .ui_components import FOOTER_ATTR, HEADER_ATTR, draw_scrollbar, init_modal_style, make_modal, text_modal
+from .ui_components import scrollbar, style
+from .ui_components.modal import make_modal
+from .ui_components.style import init_modal_style
+from .ui_components.text_modal import text_modal
 
 def draw(stdscr, monitor: ArpMonitor, selected_mac: str, query: str = "") -> str:
     stdscr.erase()
@@ -22,14 +25,14 @@ def draw(stdscr, monitor: ArpMonitor, selected_mac: str, query: str = "") -> str
             except curses.error:
                 pass
 
-    put(0, "LANTERN · LAN DEVICE MONITOR", HEADER_ATTR)
+    put(0, "LANTERN · LAN DEVICE MONITOR", style.HEADER_ATTR)
     if height < 8 or width < 24:
         put(2, "Terminal too small; resize to at least 24 columns × 8 rows. q quits.")
         stdscr.refresh()
         return selected_mac
-    put(1, f"{monitor.iface} · {monitor.network} · gateway {monitor.gateway or '—'} · sweep {ago(time.monotonic() - monitor.last_sweep)}", HEADER_ATTR)
+    put(1, f"{monitor.iface} · {monitor.network} · gateway {monitor.gateway or '—'} · sweep {ago(time.monotonic() - monitor.last_sweep)}", style.HEADER_ATTR)
     latest = monitor.status_message or (monitor.events[-1] if monitor.events else "")
-    put(2, (latest or f"Auto probes {'ON' if monitor.auto_probe else 'OFF'} · interval {monitor.interval}s")[:width - 2], HEADER_ATTR)
+    put(2, (latest or f"Auto probes {'ON' if monitor.auto_probe else 'OFF'} · interval {monitor.interval}s")[:width - 2], style.HEADER_ATTR)
 
     items = filtered_devices(monitor, query)
     put(3, f"Filter: /{query}" if query else "DEVICES")
@@ -76,10 +79,10 @@ def draw(stdscr, monitor: ArpMonitor, selected_mac: str, query: str = "") -> str
     first = max(0, min(selected_row - visible + 1, len(table_rows) - visible)) if visible else 0
     for index, (text, _device, attr) in enumerate(table_rows[first:first + visible]):
         put(list_start + index, text, attr, scrollbar_gutter=True)
-    draw_scrollbar(stdscr, len(table_rows), visible, first,
+    scrollbar.draw_scrollbar(stdscr, len(table_rows), visible, first,
                    y=list_start, height=visible, x=width - 1)
 
-    put(height - 1, f"{len(items)} devices · ↑/↓ move · Enter details · / filter · t traffic · ? help · q quit", FOOTER_ATTR)
+    put(height - 1, f"{len(items)} devices · ↑/↓ move · Enter details · / filter · t traffic · ? help · q quit", style.FOOTER_ATTR)
     stdscr.refresh()
     return selected_mac
 

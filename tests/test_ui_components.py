@@ -1,7 +1,9 @@
 import curses
 import unittest
+from unittest.mock import patch
 
-from lantern.libs.ui_components import draw_scrollbar
+from lantern.libs.ui_components import style
+from lantern.libs.ui_components.scrollbar import draw_scrollbar
 
 
 class FakeWindow:
@@ -15,6 +17,25 @@ class FakeWindow:
 
     def addch(self, y, x, glyph, attr):
         self.cells.append((y, x, glyph, attr))
+
+
+class StyleTests(unittest.TestCase):
+    def test_initialized_color_attributes_are_read_from_shared_module(self):
+        original = style.MODAL_ATTR, style.HEADER_ATTR, style.FOOTER_ATTR
+        try:
+            with (
+                patch("lantern.libs.ui_components.style.curses.has_colors", return_value=True),
+                patch("lantern.libs.ui_components.style.curses.start_color"),
+                patch("lantern.libs.ui_components.style.curses.init_pair"),
+                patch("lantern.libs.ui_components.style.curses.color_pair", side_effect=(10, 20, 30)),
+            ):
+                style.init_modal_style()
+
+            self.assertEqual(style.MODAL_ATTR, 10)
+            self.assertEqual(style.HEADER_ATTR, 20 | curses.A_BOLD)
+            self.assertEqual(style.FOOTER_ATTR, 30)
+        finally:
+            style.MODAL_ATTR, style.HEADER_ATTR, style.FOOTER_ATTR = original
 
 
 class ScrollbarTests(unittest.TestCase):

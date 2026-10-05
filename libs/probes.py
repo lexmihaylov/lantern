@@ -12,7 +12,9 @@ import time
 
 from .models import Device
 from .network import ArpMonitor
-from .ui_components import make_modal, probe_scroll_bottom, render_probe_modal, text_modal
+from .ui_components.modal import make_modal
+from .ui_components.probe_modal import probe_scroll_bottom, render_probe_modal
+from .ui_components.text_modal import text_modal
 
 def ping_device(stdscr, device: Device, monitor: ArpMonitor) -> None:
     try:

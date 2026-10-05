@@ -27,6 +27,6 @@ dependencies = []
 lantern = "lantern.libs.cli:main_entry"
 
 [tool.setuptools]
-packages = ["lantern", "lantern.libs"]
+packages = ["lantern", "lantern.libs", "lantern.libs.ui_components"]
 package-dir = { lantern = ".", "lantern.libs" = "libs" }
 

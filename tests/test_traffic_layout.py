@@ -72,6 +72,13 @@ class TrafficTableLayoutTests(unittest.TestCase):
         self.assertEqual(row[protocol_start:protocol_start + 8], "TCP     ")
         self.assertEqual(row[packets_start:packets_start + layout.packet_width], "123456789")
 
+    def test_wide_layout_keeps_last_seen_with_scrollbar_gutter_width(self):
+        layout = traffic_table_layout(54)
+
+        self.assertEqual(layout.mode, "wide")
+        self.assertEqual(layout.last_width, 9)
+        self.assertIn("LAST SEEN", format_traffic_header(layout))
+
     def test_medium_and_narrow_layouts_drop_lower_priority_columns(self):
         medium = traffic_table_layout(50)
         narrow = traffic_table_layout(42)

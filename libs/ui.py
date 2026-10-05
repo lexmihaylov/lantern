@@ -14,11 +14,11 @@ def draw(stdscr, monitor: ArpMonitor, selected_mac: str, query: str = "") -> str
     stdscr.erase()
     height, width = stdscr.getmaxyx()
 
-    def put(y: int, text: str, attr: int = 0) -> None:
+    def put(y: int, text: str, attr: int = 0, *, scrollbar_gutter: bool = False) -> None:
         if 0 <= y < height and width > 2:
             try:
-                # Reserve a blank column before the right-edge scrollbar.
-                stdscr.addnstr(y, 1, text, width - 3, attr)
+                available = width - (3 if scrollbar_gutter else 2)
+                stdscr.addnstr(y, 1, text, available, attr)
             except curses.error:
                 pass
 
@@ -39,7 +39,8 @@ def draw(stdscr, monitor: ArpMonitor, selected_mac: str, query: str = "") -> str
 
     state_w, ip_w, age_w = 8, 15, 4
     compact = width < 70
-    name_w = max(1, width - (34 if not compact else 14))
+    # Account for the list gutter by narrowing the name field, not the AGE column.
+    name_w = max(1, width - (35 if not compact else 30))
     column_header = (f"  {'STATE':<{state_w}} {'IP':<{ip_w}} {'NAME/LABEL':<{name_w}} {'AGE':>{age_w}}"
                      if not compact else f"  {'STATE':<{state_w}} {'IP':<{ip_w}} {'NAME/LABEL'}")
     groups = [
@@ -74,7 +75,7 @@ def draw(stdscr, monitor: ArpMonitor, selected_mac: str, query: str = "") -> str
     visible = max(0, footer_start - list_start)
     first = max(0, min(selected_row - visible + 1, len(table_rows) - visible)) if visible else 0
     for index, (text, _device, attr) in enumerate(table_rows[first:first + visible]):
-        put(list_start + index, text, attr)
+        put(list_start + index, text, attr, scrollbar_gutter=True)
     draw_scrollbar(stdscr, len(table_rows), visible, first,
                    y=list_start, height=visible, x=width - 1)
 

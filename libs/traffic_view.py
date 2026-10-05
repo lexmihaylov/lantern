@@ -225,7 +225,7 @@ def traffic_table_layout(terminal_width: int, packet_width: int = 7,
     byte_width = max(5, byte_width)
     last_width = max(9, last_width)
     candidates = (
-        ("wide", 8 + packet_width + byte_width + last_width + 8, 16, byte_width, last_width),
+        ("wide", 8 + packet_width + byte_width + last_width + 8, 15, byte_width, last_width),
         ("medium", 8 + packet_width + byte_width + 6, 16, byte_width, 0),
         ("narrow", 8 + packet_width + 4, 10, 0, 0),
     )
@@ -421,11 +421,11 @@ def traffic_view(stdscr, monitor: ArpMonitor, selected_mac: str) -> None:
             stdscr.erase()
             height, width = stdscr.getmaxyx()
 
-            def put(y: int, text: str, attr: int = 0) -> None:
+            def put(y: int, text: str, attr: int = 0, *, scrollbar_gutter: bool = False) -> None:
                 if 0 <= y < height and width > 2:
                     try:
-                        # Leave one blank column between content and the scrollbar.
-                        stdscr.addnstr(y, 1, _fit_terminal_cell(text, width - 3), width - 3, attr)
+                        available = width - (3 if scrollbar_gutter else 2)
+                        stdscr.addnstr(y, 1, _fit_terminal_cell(text, available), available, attr)
                     except curses.error:
                         pass
 
@@ -450,20 +450,26 @@ def traffic_view(stdscr, monitor: ArpMonitor, selected_mac: str) -> None:
             packet_width = max((len(entry[2]) for entry in entries), default=7)
             byte_width = max((len(entry[3]) for entry in entries), default=5)
             last_width = max((_terminal_cell_width(entry[4]) for entry in entries), default=9)
-            layout = traffic_table_layout(width - 1, packet_width, byte_width, last_width)
-            put(3, format_traffic_header(layout), curses.A_UNDERLINE)
-
+            layout = traffic_table_layout(width, packet_width, byte_width, last_width)
             visible = max(0, height - 6)
             table_lines: list[str] = []
             if not entries:
+                put(3, format_traffic_header(layout), curses.A_UNDERLINE)
                 put(4, "No matching packets observed yet. Other devices' unicast traffic may not be visible here.")
             else:
                 for entry in entries:
                     table_lines.extend(format_traffic_row(*entry, layout))
+                needs_scrollbar = len(table_lines) > visible
+                if needs_scrollbar:
+                    # Keep the scrollbar gutter out of the table's usable width.
+                    layout = traffic_table_layout(width - 1, packet_width, byte_width, last_width)
+                    table_lines = [line for entry in entries for line in format_traffic_row(*entry, layout)]
+                put(3, format_traffic_header(layout), curses.A_UNDERLINE,
+                    scrollbar_gutter=needs_scrollbar)
                 max_scroll = max(0, len(table_lines) - visible)
                 traffic_scroll = max(0, min(traffic_scroll, max_scroll))
                 for index, line in enumerate(table_lines[traffic_scroll:traffic_scroll + visible], 4):
-                    put(index, line)
+                    put(index, line, scrollbar_gutter=needs_scrollbar)
                 draw_scrollbar(stdscr, len(table_lines), visible, traffic_scroll,
                                y=4, height=visible, x=width - 1)
             note = ("PTR names may be missing or generic; lookups use system DNS."
@@ -474,10 +480,11 @@ def traffic_view(stdscr, monitor: ArpMonitor, selected_mac: str) -> None:
                       else "s start interception")
             scroll_hint = "↑/↓ scroll"
             if capture_error:
-                retry_hint = " · s retry ARP restore" if spoof_session and spoof_session.needs_restore else ""
-                footer = f"Capture stopped · {scroll_hint}{retry_hint} · q / Esc return"
+                footer = ("s retry ARP restore · q / Esc return"
+                          if spoof_session and spoof_session.needs_restore
+                          else "Capture stopped · q / Esc return")
             else:
-                footer = f"Capture active · {scroll_hint} · {action} · q / Esc return"
+                footer = f"{action} · {scroll_hint} · q / Esc return"
             put(height - 1, footer, FOOTER_ATTR)
             stdscr.refresh()
             key = stdscr.getch()

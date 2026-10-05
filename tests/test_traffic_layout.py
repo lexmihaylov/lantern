@@ -2,7 +2,7 @@ from concurrent.futures import Future
 import unittest
 
 from lantern.libs.models import Flow
-from lantern.libs.ui import (
+from lantern.libs.traffic_view import (
     _terminal_cell_width,
     format_traffic_header,
     format_traffic_row,

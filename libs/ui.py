@@ -47,8 +47,7 @@ def draw(stdscr, monitor: ArpMonitor, selected_mac: str, query: str = "") -> str
     column_header = (f"  {'STATE':<{state_w}} {'IP':<{ip_w}} {'NAME/LABEL':<{name_w}} {'AGE':>{age_w}}"
                      if not compact else f"  {'STATE':<{state_w}} {'IP':<{ip_w}} {'NAME/LABEL'}")
     groups = [
-        ("NEW DEVICES", [d for d in items if d.state == "NEW"]),
-        ("ONLINE DEVICES", [d for d in items if d.state not in ("NEW", "QUIET", "OFFLINE")]),
+        ("ONLINE DEVICES", [d for d in items if d.state not in ("QUIET", "OFFLINE")]),
         ("OFFLINE / QUIET DEVICES", [d for d in items if d.state in ("QUIET", "OFFLINE")]),
     ]
     table_rows: list[tuple[str, Device | None, int]] = []
